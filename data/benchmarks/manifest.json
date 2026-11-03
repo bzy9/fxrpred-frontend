@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "datasets": {
+    "FXR_AGO": {
+      "records": 6763,
+      "sha256": "d6afe1880ce21d4fd9598e6d13dbcf3729b8996c8a63eababedb16d37043a515",
+      "source_ids_available": 6649,
+      "labels": {
+        "label": {
+          "positive": 1146,
+          "negative": 5617,
+          "missing": 0
+        }
+      },
+      "partitions": {},
+      "download_columns": [
+        "smiles",
+        "label"
+      ]
+    },
+    "FXR_ANT": {
+      "records": 5400,
+      "sha256": "cb90eaca1fc48114883047cdb82a1324564862eae5e0f45ef767ea939def6c9e",
+      "source_ids_available": 5321,
+      "labels": {
+        "label": {
+          "positive": 514,
+          "negative": 4886,
+          "missing": 0
+        }
+      },
+      "partitions": {},
+      "download_columns": [
+        "smiles",
+        "label"
+      ]
+    },
+    "MTL": {
+      "records": 10776,
+      "sha256": "a6101118a5af0de6b9f29cd2135f2dfd79d56191b53dfb9e98439133e5dd0ef9",
+      "source_ids_available": 10670,
+      "labels": {
+        "FXR_ago": {
+          "positive": 1146,
+          "negative": 5617,
+          "missing": 4013
+        },
+        "PXR_ago": {
+          "positive": 1319,
+          "negative": 3866,
+          "missing": 5591
+        },
+        "LXR_ago": {
+          "positive": 319,
+          "negative": 475,
+          "missing": 9982
+        },
+        "PPAR_ago": {
+          "positive": 1510,
+          "negative": 5223,
+          "missing": 4043
+        }
+      },
+      "partitions": {
+        "training": 8612,
+        "val": 1083,
+        "test": 1081
+      },
+      "download_columns": [
+        "smiles",
+        "group",
+        "FXR_ago",
+        "PXR_ago",
+        "LXR_ago",
+        "PPAR_ago"
+      ]
+    }
+  },
+  "profiles": {
+    "rdkit_version": "2026.09.1",
+    "unique_smiles": 11258,
+    "computed": 11258,
+    "failed": 0,
+    "failures": [],
+    "sha256": "c63fe88c9ecce0c7d9080c1df07449ec53b13de1994e74bbfc54f73c9c3d5c82",
+    "method": "Largest organic component by heavy-atom count, then molecular weight; no neutralization or tautomer changes."
+  }
+}
