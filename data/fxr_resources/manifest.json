@@ -1,0 +1,51 @@
+{
+  "version": "2026-11-18-E-benchmark-display",
+  "collection": "Curated FXR activity data",
+  "unique_molecules": 7652,
+  "selection": "All integrated FXR records, including negative annotations; one canonical isomeric SMILES per row.",
+  "data_policy": {
+    "excluded_unmatched_AGO": 175,
+    "excluded_conflicting_ANT": 7,
+    "AGO_labels_resolved_to_benchmark": 12,
+    "unknown_labels": "Blank; never converted to zero",
+    "benchmark_files": "Kept unchanged"
+  },
+  "rdkit_version": "2026.09.1",
+  "property_method": "Largest organic component by heavy-atom count, then molecular weight; no neutralization or tautomer changes. Original full SMILES retained.",
+  "scaffold_method": "RDKit Bemis-Murcko ring/linker frameworks of the same property component; stereochemistry excluded only from scaffold grouping; acyclic molecules have an empty scaffold.",
+  "files": {
+    "fxr_ligands.csv": {
+      "sha256": "f99d495e6d392c852dea0ddde942769147e17cecc5d24fe7d0dbf1821a2b5b5f"
+    },
+    "molecular_properties.csv": {
+      "sha256": "794703ba6bacbb68ef2cfdb7b3a253023f8212858baa73da49b44d885923888c"
+    }
+  },
+  "resource_id_policy": "Sequential 1..7652 after moving the default 20 complete active preview records to the front. Search, preview and downloads use the same IDs; query results retain these IDs.",
+  "activity_display_policy": "A positive task is displayed as FXR agonist / FXR antagonist. Inactive means no positive annotation among available tasks; blank task labels remain unannotated.",
+  "active_molecules": 1977,
+  "inactive_molecules": 5675,
+  "display_label_overrides": [
+    {
+      "smiles": "CC(C)(C)c1ccc(-n2cnc3c(NC(=O)Cc4ccc(C(=O)O)cc4)cccc32)cc1",
+      "bindingdb_monomer_id": "50614632",
+      "chembl_id": "CHEMBL5290209",
+      "labels": {
+        "FXR_agonist_label": "1",
+        "FXR_antagonist_label": ""
+      },
+      "display_label": "FXR agonist",
+      "policy": "benchmark_preferred",
+      "authority": "FXR_AGO.csv label=1; no corresponding record in FXR_ANT.csv",
+      "original_labels": {
+        "FXR_agonist_label": "1",
+        "FXR_antagonist_label": "1"
+      },
+      "note": "Display follows the existing benchmark. External antagonist evidence remains in raw resource records; absence from the antagonist benchmark is not encoded as a negative label."
+    }
+  ],
+  "display_positive_groups": {
+    "AGO": 1360,
+    "ANT": 617
+  }
+}

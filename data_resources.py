@@ -202,3 +202,124 @@ def descriptor_profiles(frame: pd.DataFrame, cache: pd.DataFrame, label_column: 
     profiles.loc[labels.eq(1), "Label"] = "Positive (1)"
     profiles.loc[labels.eq(0), "Label"] = "Negative (0)"
     return profiles
+
+# Integrated FXR resource collection: cached properties, no RDKit or network.
+RESOURCE_PROPERTIES = {
+    "qed": ("QED", "QED"),
+    "molecular_weight": ("Molecular weight", "Molecular weight (g/mol)"),
+    "tpsa": ("TPSA", "TPSA (Å²)"),
+    "hba": ("H-bond acceptors", "HBA"),
+    "hbd": ("H-bond donors", "HBD"),
+    "clogp": ("LogP", "Calculated LogP"),
+}
+RESOURCE_LABELS = ("FXR_agonist_label", "FXR_antagonist_label")
+RESOURCE_EXPORT_COLUMNS = ["Resource ID", "smiles", "Activity annotations", *RESOURCE_LABELS, *RESOURCE_PROPERTIES]
+
+
+def load_fxr_resources(data_dir: Path) -> pd.DataFrame:
+    import hashlib
+    import json
+    import numpy as np
+    root = Path(data_dir)
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    for name in ("fxr_ligands.csv", "molecular_properties.csv"):
+        path = root / name
+        if hashlib.sha256(path.read_bytes()).hexdigest() != manifest["files"][name]["sha256"]:
+            raise BenchmarkDataError(f"Resource file differs from its manifest: {name}.")
+    frame = pd.read_csv(root / "fxr_ligands.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
+    properties = pd.read_csv(root / "molecular_properties.csv", dtype={"Resource ID": str}, keep_default_na=False, encoding="utf-8-sig")
+    required = {"Resource ID", "smiles", *RESOURCE_LABELS, "source_ids", "dataset_membership"}
+    if not required.issubset(frame) or not {"Resource ID", *RESOURCE_PROPERTIES, "scaffold_smiles"}.issubset(properties):
+        raise BenchmarkDataError("The FXR collection is missing required fields.")
+    if frame.empty or len(frame) != manifest["unique_molecules"] or frame["Resource ID"].duplicated().any() or frame["smiles"].duplicated().any():
+        raise BenchmarkDataError("The FXR collection must contain unique molecular records.")
+    for column in RESOURCE_LABELS:
+        if not frame[column].isin(["", "0", "1"]).all():
+            raise BenchmarkDataError("Resource task labels must be 0, 1 or blank.")
+    if not frame[list(RESOURCE_LABELS)].ne("").any(axis=1).all():
+        raise BenchmarkDataError("Every FXR resource must have at least one annotated task.")
+    if frame["Resource ID"].tolist() != [str(i) for i in range(1, len(frame) + 1)]:
+        raise BenchmarkDataError("Resource IDs must follow the stored sequential numbering.")
+    if set(frame["Resource ID"]) != set(properties["Resource ID"]):
+        raise BenchmarkDataError("Molecular-property records do not cover the collection.")
+    frame = frame.merge(properties, on="Resource ID", how="left", validate="one_to_one")
+    for column in RESOURCE_PROPERTIES:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    if not np.isfinite(frame[list(RESOURCE_PROPERTIES)].to_numpy()).all():
+        raise BenchmarkDataError("The collection contains invalid molecular properties.")
+    if not frame["qed"].between(0, 1).all() or not frame["molecular_weight"].gt(0).all():
+        raise BenchmarkDataError("Invalid QED or molecular weight.")
+    for column in ("tpsa", "hba", "hbd"):
+        if not frame[column].ge(0).all():
+            raise BenchmarkDataError("Invalid polar-surface or hydrogen-bond descriptor.")
+    # Keep source evidence separate from the benchmark-aligned display labels.
+    for column in RESOURCE_LABELS:
+        frame["raw_" + column] = frame[column]
+    frame["annotation_policy"] = "curated"
+    for override in manifest.get("display_label_overrides", []):
+        mask = frame["smiles"].eq(override["smiles"])
+        if int(mask.sum()) != 1:
+            raise BenchmarkDataError("A display-label override does not identify one molecular record.")
+        for column, value in override["labels"].items():
+            if column not in RESOURCE_LABELS or value not in ("", "0", "1"):
+                raise BenchmarkDataError("Invalid benchmark display-label override.")
+            frame.loc[mask, column] = value
+        frame.loc[mask, "annotation_policy"] = override["policy"]
+    frame["Activity annotations"] = frame.apply(
+        lambda r: "; ".join(name for column, name in zip(RESOURCE_LABELS, ("FXR agonist", "FXR antagonist")) if r[column] == "1"), axis=1,
+    )
+    frame["Activity annotations"] = frame["Activity annotations"].replace("", "Inactive")
+    return frame
+
+
+def filter_fxr_resources(frame: pd.DataFrame, query: str = "") -> pd.DataFrame:
+    needle = query.strip()
+    if not needle:
+        return frame.copy()
+    # A valid plain row number selects the exact Resource ID, not SMILES ring digits.
+    if needle.isascii() and needle.isdecimal():
+        exact = frame["Resource ID"].eq(str(int(needle)))
+        if exact.any():
+            return frame.loc[exact].copy()
+    mask = frame["smiles"].str.contains(needle, case=True, regex=False, na=False)
+    for column in ("Resource ID", "source_ids", "BindingDB MonomerID", "BindingDB Reactant_set_id", "Molecule ChEMBL ID"):
+        if column in frame:
+            mask |= frame[column].str.contains(needle, case=False, regex=False, na=False)
+    return frame.loc[mask].copy()
+
+
+def resource_csv_bytes(frame: pd.DataFrame) -> bytes:
+    # Explicit allowlist: never export provenance or future internal fields.
+    return frame.loc[:, RESOURCE_EXPORT_COLUMNS].to_csv(index=False).encode("utf-8-sig")
+
+
+def scaffold_summary(frame: pd.DataFrame, limit: int = 10) -> pd.DataFrame:
+    counts = frame.loc[frame["scaffold_smiles"].ne(""), "scaffold_smiles"].value_counts()
+    table = counts.rename_axis("Scaffold SMILES").reset_index(name="Molecules")
+    table = table.sort_values(["Molecules", "Scaffold SMILES"], ascending=[False, True]).head(limit).reset_index(drop=True)
+    table.insert(0, "Scaffold", [f"S{i + 1:02}" for i in range(len(table))])
+    table["Fraction (%)"] = table["Molecules"] / len(frame) * 100 if len(frame) else 0.0
+    return table
+
+
+
+def resource_preview(frame: pd.DataFrame, query: str = "", limit: int = 20) -> pd.DataFrame:
+    """Default to complete active records; never conceal explicit search matches."""
+    if query.strip():
+        return frame.head(limit).copy()
+    active = frame[list(RESOURCE_LABELS)].eq("1").any(axis=1)
+    task_complete = frame[list(RESOURCE_LABELS)].isin(["0", "1"]).all(axis=1)
+    # A reviewed benchmark-only display is complete for its accepted direction.
+    # Do not invent a negative label merely to keep this record in the preview.
+    task_complete |= frame["annotation_policy"].eq("benchmark_preferred")
+    source_complete = frame["source_ids"].str.strip().ne("")
+    property_complete = frame[list(RESOURCE_PROPERTIES)].notna().all(axis=1)
+    return frame.loc[active & task_complete & source_complete & property_complete].head(limit).copy()
+
+
+def active_resource_groups(frame: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    """Each profile uses its own positive task label; shared positives can appear twice."""
+    return {
+        "AGO": frame.loc[frame["FXR_agonist_label"].eq("1")].copy(),
+        "ANT": frame.loc[frame["FXR_antagonist_label"].eq("1")].copy(),
+    }

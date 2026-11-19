@@ -60,8 +60,15 @@ def validate_ortho_results(api_response, smiles_list, np_ids):
 APP_DIR = Path(__file__).resolve().parent
 
 
+def _open_home_card(destination):
+    """Open a feature page through a native Streamlit button callback."""
+    if destination not in ("FXR Prediction", "Multi-target Prediction", "Data Resources"):
+        raise ValueError("Unknown Home card destination.")
+    st.session_state.current_page = destination
+
+
 # ==========================================
-# 🖼️ 1. 安全读取本地背景图片逻辑
+# 🖼️ 1. Safely load local background images
 # ==========================================
 def get_base64_of_bin_file(bin_file):
     """读取本地文件并转换为 Base64 编码，若找不到文件则返回空"""
@@ -72,17 +79,17 @@ def get_base64_of_bin_file(bin_file):
         return base64.b64encode(data).decode()
     return ""
 
-# 读取背景图 (若没找到则为空字符串)
+# Load the background image, or use an empty string if it is missing.
 hero_img_base64 = get_base64_of_bin_file("assets/hero_bg.png")
 
-# 构建安全的 CSS 背景属性
+# Build the CSS background property safely.
 if hero_img_base64:
     hero_bg_css = f'url("data:image/png;base64,{hero_img_base64}")'
 else:
     hero_bg_css = 'none'
 
 # ==========================================
-# 🎨 2. FXRPred 全局 CSS
+# 🎨 2. Global FXRPred CSS
 # ==========================================
 css_code = """
 <style>
@@ -244,6 +251,30 @@ div[data-testid="stHorizontalBlock"]:has(#hero-btn-marker) > div:nth-child(3) bu
 .stat-icon { font-size: 28px; color: #3b82f6; margin-bottom: 8px; }
 .stat-number { font-size: 26px; font-weight: 800; color: #0f172a; line-height: 1.2; }
 .stat-label { font-size: 13px; color: #64748b; margin-top: 4px; font-weight: 500; }
+
+/* Data Resources Home card: E-preview alignment and native click target. */
+.st-key-home_card_resources { position: relative; }
+.st-key-home_card_resources .feature-subtitle { line-height: 1.6; min-height: 3.2em; }
+.st-key-home_card_resources .fxr-feature-card > div:first-child { flex-shrink: 0; }
+.st-key-home_card_resources .fxr-feature-card > div:first-child > img { flex: 0 0 48px; }
+.st-key-home_card_resources div[data-testid="stElementContainer"]:has(> div[data-testid="stButton"]) {
+    position: absolute !important; inset: 0 !important;
+    width: 100% !important; height: 100% !important;
+    margin: 0 !important; z-index: 2;
+}
+.st-key-home_card_resources div[data-testid="stButton"] { width: 100%; height: 100%; }
+.st-key-home_card_resources div[data-testid="stButton"] > button {
+    position: absolute !important; inset: 0 !important;
+    width: 100% !important; height: 100% !important;
+    opacity: 0 !important; margin: 0 !important; cursor: pointer;
+}
+.st-key-home_card_resources:hover .fxr-feature-card {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0,0,0,.08), inset 0 2px 4px rgba(255,255,255,.9);
+}
+.st-key-home_card_resources:focus-within .fxr-feature-card {
+    outline: 3px solid #93c5fd; outline-offset: 3px;
+}
 </style>
 """
 
@@ -251,7 +282,7 @@ css_code = css_code.replace("HERO_BG_PLACEHOLDER", hero_bg_css)
 st.markdown(css_code, unsafe_allow_html=True)
 
 # ==========================================
-# 🚀 3. 顶部导航栏渲染
+# 🚀 3. Render the top navigation bar
 # ==========================================
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Home"
@@ -263,7 +294,7 @@ if st.session_state.current_page == "Substructure Analysis":
 nav_pages = ["Home", "FXR Prediction", "Multi-target Prediction", "Data Resources", "Help"]
 nav_cols = st.columns([2.7, 1.05, 1.45, 1.75, 1.65, 0.75], gap="small")
 
-# 1. 在这里读取你的 Logo 图片
+# 1. Load the logo image.
 logo_base64 = get_base64_of_bin_file("assets/logo.png")
 logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="width: 42px; height: 42px; object-fit: contain;">' if logo_base64 else ''
 
@@ -283,8 +314,8 @@ with nav_cols[0]:
 
 page = st.session_state.current_page
 
-# 🌟 动态注入 CSS，高亮当前所在的页面按钮
-# 因为 logo 占了第 1 列 (索引为1)，所以右边的按钮从第 2 列开始算。
+# 🌟 Inject CSS to highlight the current page button.
+# The logo occupies the first displayed column; navigation buttons start in the second.
 if page in nav_pages:
     active_index = nav_pages.index(page) + 2
     st.markdown(f"""
@@ -297,7 +328,7 @@ if page in nav_pages:
         </style>
     """, unsafe_allow_html=True)
 
-# 渲染按钮
+# Render the navigation buttons.
 for i, label in enumerate(nav_pages, start=1):
     with nav_cols[i]:
         if st.button(label, key=f"nav_{label}", use_container_width=True):
@@ -307,11 +338,11 @@ for i, label in enumerate(nav_pages, start=1):
 page = st.session_state.current_page
 
 # ============================================================
-# 🏠 4. HOME PAGE 主体内容
+# 🏠 4. Home page content
 # ============================================================
 if page == "Home":
 
-    # --- 渲染 Hero 横幅 ---
+    # --- Render the hero banner ---
     st.markdown(
         """
         <div class="fxr-hero">
@@ -331,7 +362,7 @@ if page == "Home":
         unsafe_allow_html=True
     )
 
-    # --- 悬浮交互按钮 ---
+    # --- Interactive buttons with hover effects ---
     col_spacer, col_btn1, col_btn2, col_rest = st.columns([1.2, 1.8, 1.8, 5.2])
 
     with col_spacer:
@@ -352,21 +383,18 @@ if page == "Home":
         st.session_state.current_page = "Help"
         st.rerun()
 
-    # --- 三大核心功能卡片 (优化版排版) ---
+    # --- Three core feature cards ---
     st.markdown('<div class="fxr-features-section"><div class="fxr-feature-container">', unsafe_allow_html=True)
     card1, card2, card3 = st.columns([1, 1, 1], gap="large")
 
     icon1 = get_base64_of_bin_file("assets/icon_fxr.png")
     icon2 = get_base64_of_bin_file("assets/icon_moe.png")
+    icon3 = get_base64_of_bin_file(str(APP_DIR / "assets/icon_sub.png"))
 
-    # 🌟 将图片尺寸稍微放大到 48px，以匹配右侧两行文字的高度
+    # 🌟 Use 48px icons to match the two-line text block on the right.
     img_tag1 = f'<img src="data:image/png;base64,{icon1}" style="width: 48px; height: 48px; object-fit: contain;">' if icon1 else ''
     img_tag2 = f'<img src="data:image/png;base64,{icon2}" style="width: 48px; height: 48px; object-fit: contain;">' if icon2 else ''
-    img_tag3 = '''<svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-        <rect x="1" y="1" width="46" height="46" rx="13" fill="#F5F3FF" stroke="#DDD6FE"/>
-        <ellipse cx="24" cy="15" rx="11" ry="5" stroke="#8B5CF6" stroke-width="2"/>
-        <path d="M13 15v18c0 2.8 4.9 5 11 5s11-2.2 11-5V15M13 24c0 2.8 4.9 5 11 5s11-2.2 11-5" stroke="#8B5CF6" stroke-width="2"/>
-    </svg>'''
+    img_tag3 = f'<img src="data:image/png;base64,{icon3}" style="width: 48px; height: 48px; object-fit: contain;">' if icon3 else ''
 
     with card1:
         st.markdown(
@@ -412,7 +440,7 @@ if page == "Home":
                         """, unsafe_allow_html=True
         )
 
-    with card3:
+    with card3, st.container(key="home_card_resources"):
         st.markdown(
             f"""
                         <div class="fxr-feature-card card-purple">
@@ -420,22 +448,23 @@ if page == "Home":
                                 {img_tag3}
                                 <div style="display: flex; flex-direction: column; justify-content: center;">
                                     <div class="feature-title feature-title-purple" style="margin-bottom: 4px;">Data Resources</div>
-                                    <div class="feature-subtitle" style="margin-bottom: 0;">Curated molecular benchmarks</div>
+                                    <div class="feature-subtitle" style="margin-bottom: 0;">Curated FXR activity resources</div>
                                 </div>
                             </div>
                             <ul class="feature-list feature-list-purple">
-                                <li>FXR & multi-task benchmark datasets</li>
-                                <li>Searchable SMILES and source IDs</li>
-                                <li>Label & molecular property profiles</li>
-                                <li>Source-free CSV downloads</li>
+                                <li>Integrated FXR activity dataset</li>
+                                <li>Molecular properties</li>
+                                <li>scaffold profiles</li>
+                                <li>Resource & benchmark downloads</li>
                             </ul>
                         </div>
                         """, unsafe_allow_html=True
         )
+        st.button("Open Data Resources", key="home_open_resources", on_click=_open_home_card, args=("Data Resources",), use_container_width=True)
     st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.markdown('<div style="height: 40px;"></div>', unsafe_allow_html=True)
-    # --- 统计数据区域 (专业 SVG 图标版) ---
+    # --- Statistics section with SVG icons ---
     st.markdown(
         """
         <div class="fxr-stats">
@@ -509,7 +538,7 @@ if page == "Home":
 
 elif page == "FXR Prediction":
     # ==========================================
-    # 🎨 局部 CSS 注入：FACA-GIN 专属 3D 高级样式 (保持不变)
+    # 🎨 Local CSS for the existing FACA-GIN 3D styling.
     # ==========================================
     st.markdown("""
     <style>
@@ -594,7 +623,7 @@ elif page == "FXR Prediction":
             label_visibility="collapsed"
         )
 
-        # 前端只传模型标识，权重位置由后端管理。
+        # Send only the model identifier; the backend manages weight locations.
         if "Agonist" in model_choice:
             model_key = "AGO"
         else:
@@ -603,7 +632,7 @@ elif page == "FXR Prediction":
         threshold_config_key = f"faca_{model_key}_threshold_config"
         threshold_widget_key = f"faca_{model_key}_activity_threshold"
 
-        # 同一会话中每个模型只查询一次服务器配置，避免 Streamlit 重运行时重复请求。
+        # Fetch each model configuration once per session to avoid duplicate requests on Streamlit reruns.
         if threshold_config_key not in st.session_state:
             try:
                 threshold_config = api_client.get_faca_recommended_threshold(model_key)
@@ -740,7 +769,7 @@ elif page == "FXR Prediction":
         heatmap_placeholder.info("⏳ Waiting for inference to display pharmacophore heatmaps...")
 
         # ==========================================
-        # 🌟 核心修改区：模型推理逻辑 -> 呼叫 api_client 管家
+        # 🌟 Request model inference through api_client.
         # ==========================================
         faca_state_key = "faca_batched_results"
         current_faca_input = (tuple(smiles_list), model_key, float(activity_threshold))
@@ -913,7 +942,7 @@ elif page == "Multi-target Prediction":
             uploaded_file = st.file_uploader(label="moe_csv_upload_hidden", type=["csv"], label_visibility="collapsed")
             if uploaded_file is not None:
                 try:
-                    # 字符串读取，避免 np_id 前导零丢失或 NA 被解释成缺失值。
+                    # Read strings to preserve leading zeros in np_id and prevent NA from becoming a missing value.
                     df = pd.read_csv(uploaded_file, dtype=str, keep_default_na=False)
                     smiles_list, np_ids, skipped = prepare_ortho_csv_input(df)
                     st.markdown('<div class="moe-status-success">✅ File uploaded successfully!</div>', unsafe_allow_html=True)
@@ -1000,7 +1029,7 @@ elif page == "Data Resources":
 
 elif page == "Help":
     # ==========================================
-    # 🎨 局部 CSS：Help & Support 风格
+    # 🎨 Local CSS for Help and Support
     # ==========================================
     st.markdown("""
     <style>
@@ -1123,7 +1152,7 @@ elif page == "Help":
                     <span class="help-quick-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg></span>
                 </div>
                 <div class="help-quick-title">Review and download</div>
-                <div class="help-quick-text">Review the prediction results and download the CSV file. Visit Data Resources to query and download benchmark datasets.</div>
+                <div class="help-quick-text">Review the prediction results and download the CSV file. Visit Data Resources to explore FXR molecular resources and download benchmark datasets.</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1153,15 +1182,15 @@ elif page == "Help":
 
         with st.expander("📌 Q4: How do I search and download benchmark data?"):
             st.write("""
-            Open **Data Resources** and choose FXR Agonist, FXR Antagonist or Multi-task.
-            Use **Search benchmark** and **Search in** to search by SMILES text, NURA ID or ChEMBL ID.
+            Open **Data Resources** to browse the integrated FXR collection.
+            Use **Search resources** to search by SMILES, Resource ID, NURA ID, ChEMBL ID or BindingDB ID.
             Click **Search** (or press Enter in the search field) to apply the query. Clear the text and search again to show all records.
             SMILES text search is case-sensitive and does not perform chemical substructure matching.
             Source identifiers are shown in the preview but excluded from all CSV downloads.
-            Binary datasets support complete or search-result downloads with **smiles** and **label** columns.
+            Download the complete FXR collection or search results. The original FXR_AGO, FXR_ANT and complete MTL benchmarks are available at the bottom of the page.
             """)
 
-        # 联系方式卡片
+        # Contact information card
         st.markdown("""
         <div class="contact-card">
             <div class="contact-icon">✉️</div>
