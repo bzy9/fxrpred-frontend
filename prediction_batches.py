@@ -94,7 +94,7 @@ def predict_faca_batches(smiles, model_key, threshold, predict, batch_size=16, o
                 reverse=True,
             )
             for image in image_rows:
-                if not isinstance(image, dict) or not image.get("atom_image") or not image.get("frag_image"):
+                if not isinstance(image, dict) or not isinstance(image.get("frag_image"), str) or not image["frag_image"]:
                     raise ValueError("Incomplete attention heatmap.")
                 match = next((i for i, entry in enumerate(active) if entry[2] == image.get("smiles")), None)
                 if match is None:

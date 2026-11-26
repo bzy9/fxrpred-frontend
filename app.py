@@ -11,67 +11,7 @@ import plotly.graph_objects as go
 import api_client
 from data_resources_page import render_data_resources_page
 
-# Temporary authentication diagnostics. Remove after troubleshooting.
-with st.expander("Connection diagnostics", expanded=False):
-    if st.button("Check Hugging Face authentication"):
-        import importlib.metadata
-        import api_client as transport
-        from huggingface_hub import HfApi
 
-        report = {}
-
-        try:
-            token = transport._setting("HF_TOKEN")
-            space_id = str(
-                transport._setting(
-                    "HF_SPACE_ID", transport.DEFAULT_SPACE_ID
-                )
-            ).strip()
-
-            report["space_id"] = space_id
-            report["gradio_client_version"] = (
-                importlib.metadata.version("gradio_client")
-            )
-            report["token_present"] = (
-                isinstance(token, str) and bool(token.strip())
-            )
-
-            if report["token_present"]:
-                report["token_has_outer_whitespace"] = (
-                    token != token.strip()
-                )
-
-                identity = HfApi(token=token).whoami()
-                report["token_account"] = identity.get("name")
-                report["account_is_pro"] = identity.get("isPro")
-
-                client = transport._create_client(space_id, token)
-                headers = {
-                    str(key).lower(): str(value)
-                    for key, value in client.headers.items()
-                }
-
-                report["client_auth_header_present"] = any(
-                    bool(headers.get(key))
-                    for key in (
-                        "authorization",
-                        "x-hf-authorization",
-                    )
-                )
-
-                report["client_auth_matches_configured_token"] = any(
-                    headers.get(key) == f"Bearer {token}"
-                    for key in (
-                        "authorization",
-                        "x-hf-authorization",
-                    )
-                )
-
-        except Exception as exc:
-            # Do not expose exception URLs or credential values.
-            report["diagnostic_error_type"] = type(exc).__name__
-
-        st.json(report)
 
 def prepare_ortho_csv_input(df):
     """用同一行筛选 SMILES 和 ID；CSV 应以字符串读取，保留 ID 前导零。"""
@@ -826,7 +766,7 @@ elif page == "FXR Prediction":
         st.markdown("<br>", unsafe_allow_html=True)
 
         heatmap_placeholder = st.empty()
-        heatmap_placeholder.info("⏳ Waiting for inference to display pharmacophore heatmaps...")
+        heatmap_placeholder.info("⏳ Waiting for inference to display BRICS fragment attention...")
 
         # ==========================================
         # 🌟 Request model inference through api_client.
@@ -888,23 +828,25 @@ elif page == "FXR Prediction":
             heatmap_imgs = response.get("heatmap_imgs", [])
             if heatmap_imgs:
                 with heatmap_placeholder.container():
+                    st.markdown("#### 🧩 BRICS Fragment Attention")
                     for index, item in enumerate(heatmap_imgs):
                         st.markdown(f"**Top {index + 1} Active Molecule:** `{item['smiles']}`")
-                        columns = st.columns(2)
-                        for column, field, title, suffix in (
-                            (columns[0], "frag_image", "🧩 Macroscopic: Fragment-level Attention Heatmap", "Macro"),
-                            (columns[1], "atom_image", "🔬 Microscopic: Atom-level Attention Heatmap", "Micro"),
-                        ):
-                            with column:
-                                png = base64.b64decode(item[field])
-                                st.image(png, use_container_width=True)
-                                st.markdown(f"<p style='text-align: center; color: gray; font-weight: bold;'>{title}</p>", unsafe_allow_html=True)
-                                st.download_button(f"⬇️ Download {suffix} Image (PNG)", png,
-                                    file_name=f"Top{index + 1}_{suffix}.png", mime="image/png",
-                                    use_container_width=True, key=f"faca_{suffix}_{index}")
+                        _, image_column, _ = st.columns([1, 6, 1])
+                        with image_column:
+                            png = base64.b64decode(item["frag_image"])
+                            st.image(png, width=800)
+                            fragment_info = item.get("fragment_info", {})
+                            status = fragment_info.get("status")
+                            if status == "no_eligible_fragment":
+                                st.info("No BRICS fragment is available for highlighting under the display criteria.")
+                            elif status and status != "highlighted":
+                                st.warning("Fragment highlighting is unavailable for this molecule; its structure is shown.")
+                            st.download_button("⬇️ Download Fragment Image (PNG)", png,
+                                file_name=f"Top{index + 1}_BRICS_Fragment.png", mime="image/png",
+                                use_container_width=True, key=f"faca_fragment_{index}")
                         st.markdown("---")
             else:
-                heatmap_placeholder.info("No attention heatmaps are available among the completed results.")
+                heatmap_placeholder.info("No fragment visualizations are available among the completed results.")
 
 elif page == "Multi-target Prediction":
     # ==========================================
