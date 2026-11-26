@@ -11,7 +11,67 @@ import plotly.graph_objects as go
 import api_client
 from data_resources_page import render_data_resources_page
 
+# Temporary authentication diagnostics. Remove after troubleshooting.
+with st.expander("Connection diagnostics", expanded=False):
+    if st.button("Check Hugging Face authentication"):
+        import importlib.metadata
+        import api_client as transport
+        from huggingface_hub import HfApi
 
+        report = {}
+
+        try:
+            token = transport._setting("HF_TOKEN")
+            space_id = str(
+                transport._setting(
+                    "HF_SPACE_ID", transport.DEFAULT_SPACE_ID
+                )
+            ).strip()
+
+            report["space_id"] = space_id
+            report["gradio_client_version"] = (
+                importlib.metadata.version("gradio_client")
+            )
+            report["token_present"] = (
+                isinstance(token, str) and bool(token.strip())
+            )
+
+            if report["token_present"]:
+                report["token_has_outer_whitespace"] = (
+                    token != token.strip()
+                )
+
+                identity = HfApi(token=token).whoami()
+                report["token_account"] = identity.get("name")
+                report["account_is_pro"] = identity.get("isPro")
+
+                client = transport._create_client(space_id, token)
+                headers = {
+                    str(key).lower(): str(value)
+                    for key, value in client.headers.items()
+                }
+
+                report["client_auth_header_present"] = any(
+                    bool(headers.get(key))
+                    for key in (
+                        "authorization",
+                        "x-hf-authorization",
+                    )
+                )
+
+                report["client_auth_matches_configured_token"] = any(
+                    headers.get(key) == f"Bearer {token}"
+                    for key in (
+                        "authorization",
+                        "x-hf-authorization",
+                    )
+                )
+
+        except Exception as exc:
+            # Do not expose exception URLs or credential values.
+            report["diagnostic_error_type"] = type(exc).__name__
+
+        st.json(report)
 
 def prepare_ortho_csv_input(df):
     """用同一行筛选 SMILES 和 ID；CSV 应以字符串读取，保留 ID 前导零。"""
